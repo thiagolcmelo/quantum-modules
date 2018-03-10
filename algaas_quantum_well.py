@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-
+in this module there is a class for calculating eigenvalues and
+eigenstates for a quantum well based on Aluminium gallium arsenide
 """
 
+# python standard
+from multiprocessing import Pool, TimeoutError
+from sklearn.preprocessing import StandardScaler
+import os, time, logging
+
+# python extended
 import numpy as np
 from scipy.special import hermite
 from scipy.integrate import simps
@@ -12,9 +19,7 @@ from scipy.signal import gaussian
 from scipy.spatial.distance import cdist
 import scipy.constants as cte
 import scipy.special as sp
-from multiprocessing import Pool, TimeoutError
-from sklearn.preprocessing import StandardScaler
-import os, time, logging
+from scipy.optimize import newton
 
 class AlGaAsQuantumWell(object):
     """
@@ -53,6 +58,7 @@ class AlGaAsQuantumWell(object):
         """
         """
         self.well_length = W = well_length
+        self.wl_au = self.well_length / self.au2ang
         self.well_x = well_x
         self.barrier_x = barrier_x
         self.device_length = L = (1.0 + 2.0 * surround) * well_length
@@ -66,6 +72,9 @@ class AlGaAsQuantumWell(object):
         self.v_ev = potential(self.z_ang) - self.gap_energy_ev(well_x)
         self.v_ev *= self.cond
         self.v_au = self.v_ev / self.au2ev
+
+        # the well's height
+        self.vb_au = self.v_au[0]-self.v_au[int(N/2)]
 
         # time specifics
         self.dt = dt
@@ -91,6 +100,53 @@ class AlGaAsQuantumWell(object):
     def analytical_solution(self, nmax=3):
         """
         """
+        eigenvalues = []
+        self.vb_au
+
+        # transcendental functions shown in most quantum mechanics
+        # books, something like:
+        # tan(k_w . L / 2) = k_b / k_w
+        # cot(k_w . L / 2) = - k_b / k_w
+        trans_tan = lambda e: np.tan(\
+            np.sqrt(2*self.m_eff*e)*self.wl_au/2) - \
+            np.sqrt(2*self.m_eff*(self.vb_au-e)) / \
+            np.sqrt(2*self.m_eff*e)
+
+        trans_cot = lambda e: 1.0 / np.tan(\
+            np.sqrt(2*self.m_eff*e)*self.wl_au/2)+\
+            np.sqrt(2*self.m_eff*(self.vb_au-e)) / \
+            np.sqrt(2*self.m_eff*e)
+
+        # vary from 0 to +vb we use a very good set of kickstart
+        # values, the excepts bellow are not properly treated because
+        # errors are mostly duo to the newton-raphson divergence
+        for f in [trans_tan, trans_cot]:
+            for e0 in np.linspace(-self.vb_au, self.vb_au, 1000):
+                try:
+                    root = newton(f, x0=e0)
+                    if root > 0:
+                        eigenvalues.append(root * self.au2ev)
+                except:
+                    pass
+                    
+        eigenvalues = np.array(list(sorted(set(eigenvalues))))
+        
+        # eigenvalues at this point is a huge list with almost
+        # 2000 elements, many of them almost the same, duo to 
+        # kickstart values leading to the same eigenvalue 
+        # the code bellow identifies the proper ranges and get the
+        # average of each, actually, the difference is only
+        # the numerical error, which is about 1e-11 eV for an 
+        # eigenvalue of order 0.01 eV
+        offset = [0]
+        for i in range(1, eigenvalues.size):
+            if np.abs(eigenvalues[i] / \
+                    np.average(eigenvalues[offset[-1]:i])-1.0) > 0.01:
+                offset.append(i)
+        offset.append(len(eigenvalues))
+        eigenvalues = [np.average(eigenvalues[offset[i]:offset[i+1]]) \
+            for i in range(len(offset)-1)]
+        return eigenvalues
         
 
     def evolve_imaginary(self, nmax=3, precision=1e-4, 
@@ -99,6 +155,7 @@ class AlGaAsQuantumWell(object):
         """
         # set time to be imaginary
         self.set_time(imaginary=True)
+        analytic_values = self.analytical_solution(nmax)
 
         if reset or not hasattr(self, 'eigenvalues'):
             # initialize eigenvalues as zero
@@ -128,9 +185,8 @@ class AlGaAsQuantumWell(object):
         
         # split step
         for s in range(nmax):
-
             while True:
-                state_before = np.copy(self.eigenstates[s])
+                #state_before = np.copy(self.eigenstates[s])
                 # time start here because the above operation
                 # has a measurement purpose which we understand
                 # not related to the method itself
@@ -169,16 +225,18 @@ class AlGaAsQuantumWell(object):
                     value_before = self.eigenvalues[s] or 1.0
                     self.eigenvalues[s] = p_h_p.real * self.au2ev # eV
                     self.eigenvalues_precisions[s] = np.abs(1.0 - \
+                    #    self.eigenvalues[s] / analytic_values[s])
                         self.eigenvalues[s] / value_before)
                     
                     if (iterations and self.counters[s] >= iterations) \
                         or (max_time and self.timers[s] >= max_time) \
                         or (not iterations and not max_time and \
                             self.eigenvalues_precisions[s] < precision):
-                        XA = [self.eigenstates[s]]
-                        XB = [state_before]
-                        self.eigenstates_precisions[s] = \
-                            cdist(XA, XB, 'sqeuclidean')[0][0]
+                        # XA = [self.eigenstates[s]]
+                        # XB = [state_before]
+                        # self.eigenstates_precisions[s] = \
+                        #     cdist(XA, XB, 'sqeuclidean')[0][0]
+                        print("%s: N=%.10e - A=%.10e, iter=%d" % (s, self.eigenvalues[s], analytic_values[s], self.counters[s]))
                         break
 
         return self
