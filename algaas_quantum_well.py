@@ -97,7 +97,7 @@ class AlGaAsQuantumWell(object):
         
         return self
 
-    def analytical_solution(self, nmax=3):
+    def analytical_solution(self):
         """
         """
         eigenvalues = []
@@ -155,7 +155,7 @@ class AlGaAsQuantumWell(object):
         """
         # set time to be imaginary
         self.set_time(imaginary=True)
-        analytic_values = self.analytical_solution(nmax)
+        analytic_values = self.analytical_solution()
 
         if reset or not hasattr(self, 'eigenvalues'):
             # initialize eigenvalues as zero
