@@ -259,21 +259,23 @@ class QuantumWell(object):
                     value_before = self.eigenvalues[s] or 1.0
                     self.eigenvalues[s] = p_h_p.real * self.au2ev # eV
                     self.eigenvalues_precisions[s] = np.abs(1.0 - \
-                        self.eigenvalues[s] / analytic_values[s])
-                    #    self.eigenvalues[s] / value_before)
+                    #    self.eigenvalues[s] / analytic_values[s])
+                        self.eigenvalues[s] / value_before)
                     
-
-                    print("%s: N=%.10e - A=%.10e, iter=%d" % (s, \
-                        self.eigenvalues[s], analytic_values[s], \
-                        self.counters[s]))
-
                     if (iterations and self.counters[s] >= iterations) \
                         or (max_time and self.timers[s] >= max_time) \
                         or (not iterations and not max_time and \
                             self.eigenvalues_precisions[s] < precision):
-                        print("%s: N=%.10e - A=%.10e, iter=%d" % (s, \
-                            self.eigenvalues[s], analytic_values[s], \
-                            self.counters[s]))
+                        
+                        print("""Energy [{0}]:
+                                Numeric={:.10e}
+                                Analytic={:.10e}
+                                iterations=%d
+                                --------------""".format(
+                                    s,
+                                    self.eigenvalues[s],
+                                    analytic_values[s],
+                                    self.counters[s]))
                         break
 
         return self
@@ -305,19 +307,4 @@ class QuantumWell(object):
         self.evolution_operator = lambda p: self.exp_v2 * \
             ifft(self.exp_t * fft(self.exp_v2 * p))
         
-        # # crank-nicolson
-        # alpha = - self.dt_au * (1j / (2 * self.m_eff * self.dz_au ** 2))/2.0
-        # beta = 1.0 - self.dt_au * (-1j * (self.v_au + 1.0 / (self.m_eff * self.dz_au ** 2)))/2.0
-        # gamma = 1.0 + self.dt_au * (-1j * (self.v_au + 1.0 / (self.m_eff * self.dz_au ** 2)))/2.0
-        # diagonal_1 = beta #[beta] * N
-        # diagonal_2 = [alpha] * (self.N - 1)
-        # diagonais = [diagonal_1, diagonal_2, diagonal_2]
-        # invB = inv(diags(diagonais, [0, -1, 1]).toarray())
-        # diagonal_3 = gamma #[gamma] * N
-        # diagonal_4 = [-alpha] * (self.N - 1)
-        # diagonais_2 = [diagonal_3, diagonal_4, diagonal_4]
-        # C = diags(diagonais_2, [0, -1, 1]).toarray()
-        # D = invB.dot(C)
-        # self.evolution_operator = lambda p: D.dot(p)
-
         return self
