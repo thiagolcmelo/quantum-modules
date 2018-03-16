@@ -17,8 +17,6 @@ from scipy.fftpack import fft, ifft, fftfreq
 from scipy.signal import gaussian
 from scipy.special import legendre
 from scipy.optimize import newton
-from scipy.sparse import diags
-from scipy.linalg import inv
 
 class QuantumWell(object):
     """Simulates a quantum well"""
@@ -115,21 +113,37 @@ class QuantumWell(object):
         # books, something like:
         # tan(k_w . L / 2) = k_b / k_w
         # cot(k_w . L / 2) = - k_b / k_w
-        trans_tan = lambda e: np.tan(\
-            np.sqrt(2*self.m_eff*e)*self.wl_au/2) - \
-            np.sqrt(self.vb_au/e - 1.0)
+        trans_tan = lambda e: np.tan(
+                np.sqrt(2*self.m_eff*e)*self.wl_au/2
+            ) - np.sqrt(self.vb_au/e - 1.0)
 
-        trans_cot = lambda e: 1.0 / np.tan(\
-            np.sqrt(2*self.m_eff*e)*self.wl_au/2) + \
-            np.sqrt(self.vb_au/e - 1.0)
+        trans_tan_der = lambda e: 1.0 / np.cos(
+                np.sqrt(2*self.m_eff*e)*self.wl_au/2
+            )**2 * (
+                self.m_eff * self.wl_au / (2 * np.sqrt(2*self.m_eff*e))
+            ) + self.vb_au / (2.0 * e**2 * np.sqrt(self.vb_au/e - 1.0))
 
-        # vary from -vb/10 to +vb we use a very good set of kickstart
+        trans_cot = lambda e: 1.0 / np.tan(
+                np.sqrt(2*self.m_eff*e)*self.wl_au/2
+            ) + np.sqrt(self.vb_au/e - 1.0)
+
+        trans_cot_der = lambda e: -1.0 / np.sin(
+                np.sqrt(2*self.m_eff*e)*self.wl_au/2
+            )**2 * (
+                self.m_eff * self.wl_au / (2 * np.sqrt(2*self.m_eff*e))
+            ) - self.vb_au / (2.0 * e**2 * np.sqrt(self.vb_au/e - 1.0))
+
+        # vary from -0.1vb to +1.1vb we use a very good set of kickstart
         # values, the excepts bellow are not properly treated because
         # errors are mostly duo to the newton-raphson divergence
-        for f in [trans_tan, trans_cot]:
+        t_functions = [
+            (trans_tan,trans_tan_der),
+            (trans_cot, trans_cot_der)
+        ]
+        for f,fp in t_functions:
             for e0 in np.linspace(-self.vb_au/10.0, self.vb_au, 10000):
                 try:
-                    root = newton(f, x0=e0)
+                    root = newton(f, x0=e0, fprime=fp)
                     if root > 0:
                         eigenvalues.append(root * self.au2ev)
                 except:
@@ -268,9 +282,9 @@ class QuantumWell(object):
                             self.eigenvalues_precisions[s] < precision):
                         
                         print("""Energy [{0}]:
-                                Numeric={:.10e}
-                                Analytic={:.10e}
-                                iterations=%d
+                                Numeric={1:.10e}
+                                Analytic={2:.10e}
+                                iterations={3}
                                 --------------""".format(
                                     s,
                                     self.eigenvalues[s],
