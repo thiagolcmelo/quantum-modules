@@ -17,6 +17,7 @@ from scipy.fftpack import fft, ifft, fftfreq
 from scipy.signal import gaussian
 from scipy.special import legendre
 from scipy.optimize import newton
+#from scipy.optimize import brentq
 
 class QuantumWell(object):
     """Simulates a quantum well"""
@@ -140,9 +141,15 @@ class QuantumWell(object):
             (trans_tan,trans_tan_der),
             (trans_cot, trans_cot_der)
         ]
+
+        # kickstart energies values
+        energies = np.linspace(-0.1*self.vb_au, 1.1*self.vb_au, 10000)
+        
         for f,fp in t_functions:
-            for e0 in np.linspace(-self.vb_au/10.0, self.vb_au, 10000):
+            for e0 in energies:
                 try:
+                    # root = brentq(f, e0, e0+(1.2*self.vb_au)/10000,
+                    #              maxiter=200)
                     root = newton(f, x0=e0, fprime=fp)
                     if root > 0:
                         eigenvalues.append(root * self.au2ev)
@@ -279,17 +286,9 @@ class QuantumWell(object):
                     if (iterations and self.counters[s] >= iterations) \
                         or (max_time and self.timers[s] >= max_time) \
                         or (not iterations and not max_time and \
-                            self.eigenvalues_precisions[s] < precision):
+                        self.eigenvalues_precisions[s] < precision) \
+                        or self.counters[s] > 300000: # hard code
                         
-                        print("""Energy [{0}]:
-                                Numeric={1:.10e}
-                                Analytic={2:.10e}
-                                iterations={3}
-                                --------------""".format(
-                                    s,
-                                    self.eigenvalues[s],
-                                    analytic_values[s],
-                                    self.counters[s]))
                         break
 
         return self
