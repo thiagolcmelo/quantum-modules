@@ -226,8 +226,8 @@ def qho_numerical(L=100.0, N=2048, dt=1e-19, \
                     or (max_time and timers[s] >= max_time) \
                     or (not iterations and not max_time \
                         and precisions[s] < precision):
-                    XA = [eigenstates_au[s]]
-                    XB = [eigenstates_au_ana[s]]
+                    XA = [np.abs(eigenstates_au[s])**2]
+                    XB = [np.abs(eigenstates_au_ana[s])**2]
                     vectors_chebyshev[s] = \
                         cdist(XA, XB, 'chebyshev')[0][0]
                     vectors_seuclidean[s] = \
